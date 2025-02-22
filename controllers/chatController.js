@@ -54,7 +54,7 @@ const callAI = async (message, modelChoice = "gpt4") => {
           { role: "user", content: message },
         ],
         model: selectedModel,
-        temperature: 1,
+        temperature: 0.7,
         max_tokens: 4096,
         top_p: 1,
       },
