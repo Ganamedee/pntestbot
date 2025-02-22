@@ -6,18 +6,36 @@ window.onload = function () {
     headerIds: false,
     mangle: false,
     sanitize: false,
+    smartLists: true,
+    smartypants: true,
+    xhtml: true,
   });
 
   // Custom renderer
   const renderer = {
     code(code, language) {
+      const escapedCode = code
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
       return `<div class="code-block">
-        <div class="code-header">
-          ${language ? `<span class="code-language">${language}</span>` : ""}
-          <button class="copy-button">Copy</button>
-        </div>
-        <pre><code class="language-${language || "text"}">${code}</code></pre>
-      </div>`;
+      <div class="code-header">
+        ${language ? `<span class="code-language">${language}</span>` : ""}
+        <button class="copy-button">Copy</button>
+      </div>
+      <pre><code class="language-${
+        language || "text"
+      }">${escapedCode}</code></pre>
+    </div>`;
+    },
+    strong(text) {
+      return `<strong>${text}</strong>`;
+    },
+    heading(text, level) {
+      return `<h${level}>${text}</h${level}>`;
     },
     blockquote(quote) {
       if (quote.includes("Parameters:")) {
@@ -38,11 +56,15 @@ window.onload = function () {
       const paramMatch = text.match(/^([^:]+):\s*(.*)$/);
       if (paramMatch) {
         return `<div class="parameter-item">
-          <code class="param-name">${paramMatch[1]}</code>
-          <div class="param-desc">${paramMatch[2]}</div>
-        </div>`;
+        <code class="param-name">${paramMatch[1]}</code>
+        <div class="param-desc">${paramMatch[2]}</div>
+      </div>`;
       }
       return `<li>${text}</li>`;
+    },
+    list(body, ordered) {
+      const type = ordered ? "ol" : "ul";
+      return `<${type}>${body}</${type}>`;
     },
   };
 
