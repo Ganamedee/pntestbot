@@ -31,44 +31,56 @@ const AVAILABLE_MODELS = {
 const callAI = async (message, modelChoice = "gpt4") => {
   const client = ModelClient(
     "https://models.github.ai/inference",
-    new AzureKeyCredential(process.env.GITHUB_TOKEN)
+    new AzureKeyCredential(process.env.GITHUB_TOKEN),
+    {
+      // Add timeout configuration
+      timeout: 60000, // 60 seconds
+      retries: 2,
+    }
   );
 
   const selectedModel =
     AVAILABLE_MODELS[modelChoice]?.id || AVAILABLE_MODELS.gpt4.id;
-  console.log(`Using model: ${selectedModel}`); // Log the model being used
+  console.log(`Using model: ${selectedModel}`);
 
-  const response = await client.path("/chat/completions").post({
-    body: {
-      messages: [
-        {
-          role: "system",
-          content: systemMessage,
-        },
-        { role: "user", content: message },
-      ],
-      model: selectedModel,
-      temperature: 1,
-      max_tokens: 4096,
-      top_p: 1,
-    },
-  });
+  try {
+    const response = await client.path("/chat/completions").post({
+      body: {
+        messages: [
+          {
+            role: "system",
+            content: systemMessage,
+          },
+          { role: "user", content: message },
+        ],
+        model: selectedModel,
+        temperature: 1,
+        max_tokens: 4096,
+        top_p: 1,
+      },
+    });
 
-  if (isUnexpected(response)) {
-    throw response.body.error;
+    if (isUnexpected(response)) {
+      throw new Error(`Model Error: ${response.body.error || "Unknown error"}`);
+    }
+
+    return {
+      content: response.body.choices[0].message.content,
+      model: {
+        requested: modelChoice,
+        actual: selectedModel,
+        displayName: AVAILABLE_MODELS[modelChoice]?.name || "Unknown Model",
+      },
+    };
+  } catch (error) {
+    if (error.message.includes("FUNCTION_INVOCATION_TIMEOUT")) {
+      throw new Error(
+        "The model is taking too long to respond. Try a shorter query or switch to a different model."
+      );
+    }
+    throw error;
   }
-
-  // Return both the response and model info
-  return {
-    content: response.body.choices[0].message.content,
-    model: {
-      requested: modelChoice,
-      actual: selectedModel,
-      displayName: AVAILABLE_MODELS[modelChoice]?.name || "Unknown Model",
-    },
-  };
 };
-
 const handleChat = async (req, res) => {
   const { message, model } = req.body;
 
