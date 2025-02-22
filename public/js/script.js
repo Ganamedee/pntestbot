@@ -24,7 +24,6 @@ window.onload = function () {
       return `<div class="code-block">
       <div class="code-header">
         ${language ? `<span class="code-language">${language}</span>` : ""}
-        <button class="copy-button">Copy</button>
       </div>
       <pre><code class="language-${
         language || "text"
