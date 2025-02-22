@@ -14,7 +14,7 @@ const AVAILABLE_MODELS = {
     id: "DeepSeek-R1",
     name: "DeepSeek",
   },
-  "llama-70b": {
+  "llama-3.3": {
     id: "Llama-3.3-70B-Instruct",
     name: "Llama 3.3 (70B)",
   },
@@ -55,7 +55,7 @@ const callAI = async (message, modelChoice = "gpt4") => {
         ],
         model: selectedModel,
         temperature: 1,
-        max_tokens: 4096,
+        max_tokens: 2048,
         top_p: 1,
       },
     });
