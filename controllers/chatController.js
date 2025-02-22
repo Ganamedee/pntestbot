@@ -34,7 +34,7 @@ const callAI = async (message, modelChoice = "gpt4") => {
     new AzureKeyCredential(process.env.GITHUB_TOKEN),
     {
       // Add timeout configuration
-      timeout: 60000, // 60 seconds
+      timeout: 90000, // 60 seconds
       retries: 2,
     }
   );
@@ -55,7 +55,7 @@ const callAI = async (message, modelChoice = "gpt4") => {
         ],
         model: selectedModel,
         temperature: 1,
-        max_tokens: 2048,
+        max_tokens: 4096,
         top_p: 1,
       },
     });
