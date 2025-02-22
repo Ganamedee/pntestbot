@@ -1,0 +1,100 @@
+require("dotenv").config();
+const ModelClient = require("@azure-rest/ai-inference").default;
+const { isUnexpected } = require("@azure-rest/ai-inference");
+const { AzureKeyCredential } = require("@azure/core-auth");
+
+const systemMessage = `You are a strictly ethical hacking assistant specialised in providing guidance and commands related to ethical hacking using Kali Linux...`;
+
+const AVAILABLE_MODELS = {
+  gpt4: {
+    id: "gpt-4o",
+    name: "GPT-4",
+  },
+  deepseek: {
+    id: "DeepSeek-R1",
+    name: "DeepSeek",
+  },
+  "llama-70b": {
+    id: "Llama-3.3-70B-Instruct",
+    name: "Llama 3.3 (70B)",
+  },
+  phi4: {
+    id: "Phi-4",
+    name: "Phi-4",
+  },
+  "llama-3.1": {
+    id: "Meta-Llama-3.1-405B-Instruct",
+    name: "Llama 3.1 (405B)",
+  },
+};
+
+const callAI = async (message, modelChoice = "gpt4") => {
+  const client = ModelClient(
+    "https://models.github.ai/inference",
+    new AzureKeyCredential(process.env.GITHUB_TOKEN)
+  );
+
+  const selectedModel =
+    AVAILABLE_MODELS[modelChoice]?.id || AVAILABLE_MODELS.gpt4.id;
+  console.log(`Using model: ${selectedModel}`); // Log the model being used
+
+  const response = await client.path("/chat/completions").post({
+    body: {
+      messages: [
+        {
+          role: "system",
+          content: systemMessage,
+        },
+        { role: "user", content: message },
+      ],
+      model: selectedModel,
+      temperature: 1,
+      max_tokens: 4096,
+      top_p: 1,
+    },
+  });
+
+  if (isUnexpected(response)) {
+    throw response.body.error;
+  }
+
+  // Return both the response and model info
+  return {
+    content: response.body.choices[0].message.content,
+    model: {
+      requested: modelChoice,
+      actual: selectedModel,
+      displayName: AVAILABLE_MODELS[modelChoice]?.name || "Unknown Model",
+    },
+  };
+};
+
+const handleChat = async (req, res) => {
+  const { message, model } = req.body;
+
+  if (!message) {
+    return res.status(400).json({ error: "Missing message" });
+  }
+
+  try {
+    const response = await callAI(message, model);
+    res.json({
+      response: response.content,
+      model: response.model,
+    });
+  } catch (error) {
+    console.error("Chat handler error:", error);
+    res.status(500).json({ error: "Failed to get response from AI" });
+  }
+};
+
+const getAvailableModels = (req, res) => {
+  res.json({
+    models: Object.entries(AVAILABLE_MODELS).map(([key, value]) => ({
+      id: key,
+      name: value.name,
+    })),
+  });
+};
+
+module.exports = { handleChat, getAvailableModels };

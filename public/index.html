@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ethical Hacking Chatbot</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <!-- Add syntax highlighting -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <!-- Add marked library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Ethical Hacking Chatbot</h1>
+      <div class="model-selector">
+        <select id="model-select" class="model-dropdown">
+          <option value="gpt4">GPT-4</option>
+          <option value="deepseek">DeepSeek</option>
+          <option value="llama-70b">Llama 3.3 (70B)</option>
+          <option value="phi4">Phi-4</option>
+          <option value="llama-3.1">Llama 3.1 (405B)</option>
+        </select>
+      </div>
+    </header>
+    <main>
+      <div id="chat-container">
+        <!-- Messages will appear here -->
+      </div>
+      <form id="chat-form">
+        <textarea
+          id="chat-input"
+          placeholder="Ask your ethical hacking question..."
+          required
+        ></textarea>
+        <button type="submit" id="sendChat">Send</button>
+      </form>
+    </main>
+    <script type="module" src="/js/script.js"></script>
+  </body>
+</html>
