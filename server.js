@@ -1,34 +1,36 @@
 require("dotenv").config();
 const express = require("express");
-const { exec } = require("child_process");
 const bodyParser = require("body-parser");
 const chatController = require("./controllers/chatController");
+const path = require("path");
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(bodyParser.json());
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, "public")));
 
-// Chat endpoint
+// Routes
 app.post("/api/chat", chatController.handleChat);
+app.get("/api/models", chatController.getAvailableModels);
 
-// Endpoint to execute shell commands (WARNING: This is extremely dangerous in production)
-app.post("/api/execute", (req, res) => {
-  const command = req.body.command;
-  if (!command) return res.status(400).send("No command provided.");
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "healthy" });
+});
 
-  // SECURITY WARNING: Executing shell commands based on user input can lead to severe vulnerabilities.
-  exec(command, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`Execution error: ${error}`);
-      return res.status(500).send(stderr);
-    }
-    res.send(stdout);
+// Serve index.html for all other routes
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// Start server if not being imported
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
   });
-});
+}
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+// Export for Vercel
+module.exports = app;
