@@ -83,8 +83,16 @@ const handleChat = async (req, res) => {
       model: response.model,
     });
   } catch (error) {
+    // Enhanced error handling
     console.error("Chat handler error:", error);
-    res.status(500).json({ error: "Failed to get response from AI" });
+    const errorMessage = error.message || "Failed to get response from AI";
+    res.status(500).json({
+      error: errorMessage,
+      model: {
+        requested: model,
+        displayName: AVAILABLE_MODELS[model]?.name || "Unknown Model",
+      },
+    });
   }
 };
 

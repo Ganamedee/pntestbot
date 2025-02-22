@@ -151,20 +151,27 @@ chatForm.addEventListener("submit", async (e) => {
       }),
     });
 
+    // Check if response is ok before parsing JSON
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API Error: ${errorText}`);
+    }
+
     const data = await response.json();
     setLoading(false);
 
     if (data.error) {
-      appendMessage(`Error: ${data.error}`, "bot");
+      appendMessage(`Error: ${data.error}`, "bot", data.model);
     } else {
-      // Log model information for debugging
-      console.log("Model debug info:", data.model);
       appendMessage(data.response, "bot", data.model);
     }
   } catch (error) {
     console.error("Fetch error:", error);
     setLoading(false);
-    appendMessage("Error: Unable to fetch response.", "bot");
+    appendMessage(
+      "The AI model is currently unavailable. Please try again later or select a different model.",
+      "bot"
+    );
   }
 });
 
