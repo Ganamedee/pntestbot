@@ -4,8 +4,22 @@
     <link rel="icon" type="image/png" href="/icon.png" />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PenTestAI</title>
+    <title>PenTestAI - Ethical Hacking Assistant</title>
+    <meta
+      name="description"
+      content="An AI-powered ethical hacking assistant to help with penetration testing and security research"
+    />
     <link rel="stylesheet" href="/css/style.css" />
+    <!-- Add Inter font -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    />
+    <!-- Add Fira Code for code blocks -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap"
+    />
     <!-- Add syntax highlighting -->
     <link
       rel="stylesheet"
@@ -22,14 +36,19 @@
         <select id="model-select" class="model-dropdown">
           <option value="gpt4">GPT-4o (OpenAI)</option>
           <option value="llama-3.3">Llama 3.3 (Meta)</option>
-          <option value="phi4">Phi-4 (Micorsoft)</option>
+          <option value="phi4">Phi-4 (Microsoft)</option>
           <option value="llama-3.1">Llama 3.1 (Meta)</option>
+          <option value="deepseek">DeepSeek</option>
         </select>
       </div>
     </header>
     <main>
       <div id="chat-container">
         <!-- Messages will appear here -->
+        <div id="connection-status" class="connection-status">
+          <span class="status-dot"></span>
+          <span class="status-text">Connection lost</span>
+        </div>
       </div>
       <form id="chat-form">
         <textarea
@@ -41,5 +60,6 @@
       </form>
     </main>
     <script type="module" src="/js/script.js"></script>
+    <script type="module" src="/js/connection-monitor.js"></script>
   </body>
 </html>

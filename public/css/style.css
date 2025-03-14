@@ -820,3 +820,142 @@ main {
 .message-content {
   position: relative;
 }
+/* Add these styles to the end of your existing style.css file */
+
+/* Error message styling */
+.message.bot .error-content {
+  border-left: 4px solid #ff4757;
+  background: rgba(255, 71, 87, 0.1);
+  padding: 1rem;
+  margin: 0.5rem 0;
+  border-radius: 0 8px 8px 0;
+}
+
+/* Retry button for error messages */
+.retry-button {
+  background: var(--accent-color);
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin-top: 1rem;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.retry-button:hover {
+  background: #0e9f6e;
+  transform: translateY(-2px);
+}
+
+/* Connection status indicator */
+.connection-status {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+  opacity: 0;
+}
+
+.connection-status.online {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.connection-status.offline {
+  background: rgba(255, 71, 87, 0.2);
+  color: #ff4757;
+  border: 1px solid rgba(255, 71, 87, 0.3);
+  opacity: 1;
+}
+
+.connection-status.visible {
+  opacity: 1;
+}
+
+/* Status indicator dot */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.online {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+}
+
+.status-dot.offline {
+  background: #ff4757;
+  box-shadow: 0 0 0 3px rgba(255, 71, 87, 0.3);
+}
+
+/* Make error messages more visible */
+.message.bot.error {
+  border-left: 4px solid #ff4757;
+}
+
+/* Improve readability of code blocks */
+.code-block pre {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Improved scrollbar for code blocks */
+.code-block pre::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.code-block pre::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.code-block pre::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+/* Welcome message styling */
+.welcome-message {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.2));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.welcome-message h1 {
+  font-size: 1.8rem;
+  color: #fff;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.welcome-message p {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+/* Make sure error messages don't disappear */
+.message.error-visible {
+  display: block !important;
+  opacity: 1 !important;
+  transition: all 0.3s ease;
+}

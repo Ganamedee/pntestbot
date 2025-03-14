@@ -8,8 +8,17 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: "1mb" })); // Increased limit for larger payloads
 app.use(express.static(path.join(__dirname, "public")));
+
+// Add error handling middleware
+app.use((err, req, res, next) => {
+  console.error("Global error handler caught:", err);
+  res.status(500).json({
+    error: "An unexpected error occurred",
+    details: process.env.NODE_ENV === "development" ? err.message : undefined,
+  });
+});
 
 // Routes
 app.post("/api/chat", chatController.handleChat);
@@ -17,7 +26,11 @@ app.get("/api/models", chatController.getAvailableModels);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-  res.status(200).json({ status: "healthy" });
+  res.status(200).json({
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV || "production",
+  });
 });
 
 // Serve index.html for all other routes
@@ -29,6 +42,12 @@ app.get("*", (req, res) => {
 if (require.main === module) {
   app.listen(port, () => {
     console.log(`Server running on port ${port}`);
+    console.log(`Environment: ${process.env.NODE_ENV || "production"}`);
+
+    // Check if API key is configured
+    if (!process.env.GITHUB_TOKEN) {
+      console.warn("WARNING: GITHUB_TOKEN environment variable is not set!");
+    }
   });
 }
 
