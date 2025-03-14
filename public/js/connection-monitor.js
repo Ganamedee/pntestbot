@@ -98,4 +98,4 @@ document.addEventListener("DOMContentLoaded", () => {
   window.connectionMonitor = new ConnectionMonitor();
 });
 
-export default ConnectionMonitor;
+// No export statement - this works directly in the browser

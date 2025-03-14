@@ -39,49 +39,83 @@ const AVAILABLE_MODELS = {
   },
 };
 
+// Add debug logging function
+const debugLog = (message, data = null) => {
+  const prefix = "[PenTestAI Debug]";
+  console.log(`${prefix} ${message}`);
+  if (data) {
+    console.log(`${prefix} Data:`, data);
+  }
+};
+
 const callAI = async (message, modelChoice = "gpt4") => {
   // Validate model choice early
   if (!AVAILABLE_MODELS[modelChoice]) {
-    console.log(`Invalid model: ${modelChoice}, falling back to GPT-4`);
+    debugLog(`Invalid model: ${modelChoice}, falling back to GPT-4`);
     modelChoice = "gpt4";
   }
 
   const selectedModel = AVAILABLE_MODELS[modelChoice].id;
-  console.log(`Using model: ${selectedModel}`);
+  debugLog(`Using model: ${selectedModel}`);
+
+  // Check if token is available
+  if (!process.env.GITHUB_TOKEN) {
+    throw new Error(
+      "API token is not configured. Please check your environment variables."
+    );
+  }
+
+  // Try to remove any whitespace from token
+  const token = process.env.GITHUB_TOKEN.trim();
+
+  debugLog("Initializing model client");
 
   // Initialize client with improved timeout and retry settings
   const client = ModelClient(
     "https://models.github.ai/inference",
-    new AzureKeyCredential(process.env.GITHUB_TOKEN),
+    new AzureKeyCredential(token),
     {
-      timeout: 120000, // 120 seconds - increased from 90s
-      retries: 3, // Increased retries from 2
+      timeout: 150000, // 150 seconds - increased from 120s
+      retries: 4, // Increased retries from 3
     }
   );
 
   try {
+    debugLog("Sending request to AI model");
+
+    // Create the request payload
+    const requestBody = {
+      messages: [
+        {
+          role: "system",
+          content: systemMessage,
+        },
+        { role: "user", content: message },
+      ],
+      model: selectedModel,
+      temperature: 0.7,
+      max_tokens: 4096,
+      top_p: 1,
+    };
+
+    debugLog("Request payload created", {
+      model: selectedModel,
+      messageLength: message.length,
+    });
+
+    // Send the request
     const response = await client.path("/chat/completions").post({
-      body: {
-        messages: [
-          {
-            role: "system",
-            content: systemMessage,
-          },
-          { role: "user", content: message },
-        ],
-        model: selectedModel,
-        temperature: 0.7,
-        max_tokens: 4096,
-        top_p: 1,
-      },
+      body: requestBody,
     });
 
     // Improved error handling
     if (isUnexpected(response)) {
       const errorDetails = response.body.error || "Unknown model error";
-      console.error(`Model response error: ${errorDetails}`);
+      debugLog(`Model response error: ${errorDetails}`, response.body);
       throw new Error(`Model Error: ${errorDetails}`);
     }
+
+    debugLog("Successfully received response from model");
 
     return {
       content: response.body.choices[0].message.content,
@@ -93,28 +127,53 @@ const callAI = async (message, modelChoice = "gpt4") => {
     };
   } catch (error) {
     // Enhanced error categorization for better debugging
-    console.error(`AI call error: ${error.message}`);
+    debugLog(`AI call error: ${error.message}`, error);
 
-    if (error.message.includes("FUNCTION_INVOCATION_TIMEOUT")) {
+    // Check for specific error types
+    if (
+      error.message.includes("FUNCTION_INVOCATION_TIMEOUT") ||
+      error.message.includes("timeout")
+    ) {
       throw new Error(
         "The AI model took too long to respond. Please try a shorter query or switch to a different model."
       );
-    } else if (error.message.includes("401") || error.message.includes("403")) {
+    } else if (
+      error.message.includes("401") ||
+      error.message.includes("403") ||
+      error.message.includes("Authentication")
+    ) {
       throw new Error(
         "Authentication error. The API key may be invalid or expired."
       );
-    } else if (error.message.includes("429")) {
+    } else if (
+      error.message.includes("429") ||
+      error.message.includes("limit")
+    ) {
       throw new Error(
         "Rate limit exceeded. Please wait a minute before trying again."
       );
     } else if (
       error.message.includes("500") ||
       error.message.includes("502") ||
-      error.message.includes("503")
+      error.message.includes("503") ||
+      error.message.includes("504")
     ) {
       throw new Error(
         "The AI service is currently experiencing issues. Please try again later."
       );
+    } else if (
+      error.message.includes("ENOTFOUND") ||
+      error.message.includes("ECONNREFUSED")
+    ) {
+      throw new Error(
+        "Unable to connect to the AI service. Please check your network connection."
+      );
+    }
+
+    // Try to extract any embedded error messages
+    const errorMatch = error.message.match(/Error: (.+)/);
+    if (errorMatch && errorMatch[1]) {
+      throw new Error(`Error connecting to AI model: ${errorMatch[1]}`);
     }
 
     // Rethrow the original error with more context
@@ -129,15 +188,21 @@ const handleChat = async (req, res) => {
     return res.status(400).json({ error: "Missing message" });
   }
 
+  debugLog(`Received chat request with model: ${model}`, {
+    messageLength: message.length,
+  });
+
   try {
     const response = await callAI(message, model);
+    debugLog("Successfully processed chat request");
+
     res.json({
       response: response.content,
       model: response.model,
     });
   } catch (error) {
     // Enhanced error handling with more context
-    console.error("Chat handler error:", error);
+    debugLog("Chat handler error:", error);
 
     const errorMessage = error.message || "Failed to get response from AI";
     const modelInfo = {

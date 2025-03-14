@@ -86,7 +86,10 @@ const modelSelect = document.getElementById("model-select");
 // Connection status tracking
 let connectionIssues = false;
 let lastRequestTime = 0;
+let lastModelUsed = null;
+let retryCount = 0;
 const MIN_REQUEST_INTERVAL = 2000; // 2 seconds to prevent rapid successive requests
+const MAX_RETRIES = 3; // Maximum number of automatic retries
 
 // Enter key handling
 chatInput.addEventListener("keydown", (e) => {
@@ -119,6 +122,16 @@ Type your ethical hacking question or ask for commands related to:
   appendMessage(welcomeMessage, "bot");
 }
 
+// Debug logging function
+function debugLog(message, data = null) {
+  if (window.debugMode) {
+    console.log(`[PenTestAI] ${message}`);
+    if (data) {
+      console.log(`[PenTestAI] Data:`, data);
+    }
+  }
+}
+
 function appendMessage(text, sender = "bot", modelInfo = null) {
   const messageEl = document.createElement("div");
   messageEl.classList.add("message", sender);
@@ -130,6 +143,17 @@ function appendMessage(text, sender = "bot", modelInfo = null) {
   messageEl.id = messageId;
 
   if (sender === "bot") {
+    // Check if this is an error message and add error class if so
+    if (
+      text.includes("error") ||
+      text.includes("unavailable") ||
+      text.includes("⚠️") ||
+      text.includes("⏱️") ||
+      text.includes("🔑")
+    ) {
+      messageEl.classList.add("error");
+    }
+
     // Add model info banner if available
     if (modelInfo) {
       const modelBanner = document.createElement("div");
@@ -150,6 +174,15 @@ function appendMessage(text, sender = "bot", modelInfo = null) {
     }
 
     messageEl.appendChild(contentDiv);
+
+    // Add retry button for error messages
+    if (messageEl.classList.contains("error")) {
+      const retryButton = document.createElement("button");
+      retryButton.className = "retry-button";
+      retryButton.innerHTML = "Try Again";
+      retryButton.addEventListener("click", retryLastRequest);
+      contentDiv.appendChild(retryButton);
+    }
 
     // Process code blocks after adding to DOM
     setTimeout(() => {
@@ -185,6 +218,9 @@ function appendMessage(text, sender = "bot", modelInfo = null) {
     }, 0);
   } else {
     messageEl.textContent = text;
+
+    // Store last user message for retry functionality
+    window.lastUserMessage = text;
   }
 
   chatContainer.appendChild(messageEl);
@@ -217,9 +253,41 @@ function setLoading(isLoading) {
   }
 }
 
+// Function to retry the last request
+function retryLastRequest() {
+  if (window.lastUserMessage) {
+    // Use a different model if we've had multiple failures
+    let selectedModel = modelSelect.value;
+
+    if (retryCount >= 1 && lastModelUsed === selectedModel) {
+      // Try a different model
+      const models = Object.keys(AVAILABLE_MODELS);
+      const currentIndex = models.indexOf(selectedModel);
+      const nextIndex = (currentIndex + 1) % models.length;
+      selectedModel = models[nextIndex];
+
+      // Update UI to show switched model
+      modelSelect.value = selectedModel;
+
+      appendMessage(
+        `Switching to ${getModelDisplayName(selectedModel)} to try again...`,
+        "bot"
+      );
+    }
+
+    // Reset the input with the last message
+    chatInput.value = window.lastUserMessage;
+
+    // Submit the form
+    chatForm.dispatchEvent(new Event("submit"));
+
+    retryCount++;
+  }
+}
+
 // Enhanced error handling
 function handleApiError(error, selectedModel) {
-  console.error("API Error:", error);
+  debugLog("API Error:", error);
 
   let errorMessage =
     "The AI model is currently unavailable. Please try again later or select a different model.";
@@ -239,6 +307,12 @@ function handleApiError(error, selectedModel) {
   if (connectionIssues) {
     errorMessage +=
       "\n\n**Troubleshooting Steps:**\n1. Try refreshing the page\n2. Try a different model\n3. Wait a few minutes and try again";
+  }
+
+  // If we've retried too many times, suggest different remedies
+  if (retryCount >= MAX_RETRIES) {
+    errorMessage +=
+      "\n\n**Multiple retries failed. You might want to:**\n- Try a simpler or shorter query\n- Check if your question follows ethical guidelines\n- Try again later when the service might be more available";
   }
 
   const modelInfo = {
@@ -273,13 +347,19 @@ const AVAILABLE_MODELS = {
   deepseek: { name: "DeepSeek" },
 };
 
+// Enable debug mode via URL parameter
+if (window.location.search.includes("debug=true")) {
+  window.debugMode = true;
+  console.log("[PenTestAI] Debug mode enabled");
+}
+
 // Enhanced chat form submission with throttling and better error handling
 chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const currentTime = Date.now();
   if (currentTime - lastRequestTime < MIN_REQUEST_INTERVAL) {
-    console.log("Throttling request - too many requests");
+    debugLog("Throttling request - too many requests");
     return;
   }
 
@@ -287,6 +367,7 @@ chatForm.addEventListener("submit", async (e) => {
 
   const userMessage = chatInput.value.trim();
   const selectedModel = modelSelect.value;
+  lastModelUsed = selectedModel;
 
   if (!userMessage || sendButton.disabled) return;
 
@@ -297,6 +378,11 @@ chatForm.addEventListener("submit", async (e) => {
   // Show loading indicator
   setLoading(true);
 
+  // Store this message for potential retry
+  window.lastUserMessage = userMessage;
+
+  debugLog(`Sending chat request with model: ${selectedModel}`);
+
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
@@ -306,7 +392,7 @@ chatForm.addEventListener("submit", async (e) => {
         model: selectedModel,
       }),
       // Add timeout to prevent hanging requests
-      signal: AbortSignal.timeout(120000), // 2 minute timeout
+      signal: AbortSignal.timeout(150000), // 2.5 minute timeout
     });
 
     // Remove loading indicator
@@ -321,8 +407,10 @@ chatForm.addEventListener("submit", async (e) => {
         const errorData = await response.json();
         errorText =
           errorData.error || `Error ${response.status}: ${response.statusText}`;
+        debugLog("Error response data:", errorData);
       } catch (e) {
         errorText = `Error ${response.status}: ${response.statusText}`;
+        debugLog("Failed to parse error response", e);
       }
 
       handleApiError(errorText, selectedModel);
@@ -332,6 +420,9 @@ chatForm.addEventListener("submit", async (e) => {
     // Parse successful response
     const data = await response.json();
     connectionIssues = false; // Reset connection issues flag on success
+    retryCount = 0; // Reset retry count on success
+
+    debugLog("Received successful response", data);
 
     if (data.error) {
       handleApiError(data.error, selectedModel);
@@ -343,7 +434,7 @@ chatForm.addEventListener("submit", async (e) => {
     setLoading(false);
     connectionIssues = true;
 
-    console.error("Fetch error:", error);
+    debugLog("Fetch error:", error);
 
     // Handle different error types
     let errorMessage =
@@ -359,6 +450,7 @@ chatForm.addEventListener("submit", async (e) => {
 // Add model change event listener to save preference
 modelSelect.addEventListener("change", (e) => {
   saveModelPreference(e.target.value);
+  retryCount = 0; // Reset retry count when model changes
 });
 
 // Set focus to input on page load
@@ -376,5 +468,16 @@ window.addEventListener("online", () => {
       "bot"
     );
     connectionIssues = false;
+  }
+});
+
+// Add network error detection
+window.addEventListener("error", (event) => {
+  if (event.target.tagName === "SCRIPT" || event.target.tagName === "LINK") {
+    debugLog("Resource error detected", {
+      resource: event.target.src || event.target.href,
+      type: event.target.tagName,
+    });
+    connectionIssues = true;
   }
 });

@@ -59,7 +59,8 @@
         <button type="submit" id="sendChat">Send</button>
       </form>
     </main>
-    <script type="module" src="/js/script.js"></script>
-    <script type="module" src="/js/connection-monitor.js"></script>
+    <!-- Load scripts in the right order - no module type for connection-monitor.js -->
+    <script src="/js/script.js"></script>
+    <script src="/js/connection-monitor.js"></script>
   </body>
 </html>
