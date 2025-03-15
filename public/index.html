@@ -28,10 +28,188 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
     <!-- Add marked library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
+    <!-- Add API status indicator styles -->
+    <style>
+      /* API Status Indicator Styles */
+      .api-status {
+        position: absolute;
+        top: 15px;
+        right: 220px;
+        font-size: 0.75rem;
+        display: flex;
+        align-items: center;
+        padding: 0.25rem 0.6rem;
+        border-radius: 20px;
+        z-index: 100;
+        gap: 0.4rem;
+        transition: all 0.3s ease;
+        cursor: pointer;
+      }
+
+      .api-status.ok {
+        background: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+      }
+
+      .api-status.error {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+      }
+
+      .api-status.warning {
+        background: rgba(245, 158, 11, 0.2);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+      }
+
+      .api-status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+
+      .api-status.ok .api-status-indicator {
+        background-color: #10b981;
+        box-shadow: 0 0 5px rgba(16, 185, 129, 0.5);
+      }
+
+      .api-status.error .api-status-indicator {
+        background-color: #ef4444;
+        box-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
+      }
+
+      .api-status.warning .api-status-indicator {
+        background-color: #f59e0b;
+        box-shadow: 0 0 5px rgba(245, 158, 11, 0.5);
+      }
+
+      /* Status modal */
+      .status-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .status-modal.open {
+        display: flex;
+      }
+
+      .status-modal-content {
+        background: var(--background);
+        width: 90%;
+        max-width: 500px;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .status-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .status-modal-header h3 {
+        margin: 0;
+        font-size: 1.2rem;
+      }
+
+      .status-modal-close {
+        background: transparent;
+        border: none;
+        color: var(--text-primary);
+        font-size: 1.5rem;
+        cursor: pointer;
+        line-height: 1;
+      }
+
+      .status-item {
+        margin: 0.75rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .status-label {
+        flex: 1;
+      }
+
+      .status-badge {
+        padding: 0.2rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+      }
+
+      .status-badge.available {
+        background: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+      }
+
+      .status-badge.error,
+      .status-badge.not_configured {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+      }
+
+      .status-badge.rate_limited {
+        background: rgba(245, 158, 11, 0.2);
+        color: #f59e0b;
+      }
+
+      .rate-limit-info {
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 8px;
+        font-size: 0.8rem;
+      }
+
+      .rate-limit-info div {
+        margin: 0.25rem 0;
+      }
+
+      .api-status.pulsing .api-status-indicator {
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+        }
+      }
+    </style>
   </head>
   <body>
     <header>
       <h1>PenTest AI</h1>
+
+      <!-- API Status Indicator -->
+      <div id="api-status" class="api-status warning">
+        <span class="api-status-indicator"></span>
+        <span class="api-status-text">Checking API...</span>
+      </div>
+
+      <!-- Model Selector -->
       <div class="model-selector">
         <select id="model-select" class="model-dropdown">
           <option value="gpt4">GPT-4o (OpenAI)</option>
@@ -42,6 +220,43 @@
         </select>
       </div>
     </header>
+
+    <!-- Rate Limit Status Modal -->
+    <div id="status-modal" class="status-modal">
+      <div class="status-modal-content">
+        <div class="status-modal-header">
+          <h3>GitHub API Status</h3>
+          <button class="status-modal-close">&times;</button>
+        </div>
+        <div id="status-modal-body">
+          <div class="status-item">
+            <span class="status-label">GitHub AI API:</span>
+            <span class="status-badge" id="github-status">Checking...</span>
+          </div>
+          <div id="rate-limit-container" style="display: none">
+            <h4>Rate Limit Information:</h4>
+            <div class="rate-limit-info">
+              <div>
+                Remaining requests: <span id="rate-remaining">--</span> /
+                <span id="rate-limit">--</span>
+              </div>
+              <div>Resets at: <span id="rate-reset">--</span></div>
+            </div>
+            <p style="margin-top: 10px; font-size: 0.85rem">
+              This application uses a shared GitHub token which has a rate
+              limit. If you use this token in multiple applications, you may hit
+              the limit faster.
+            </p>
+          </div>
+          <div class="status-item" style="margin-top: 1rem">
+            <button id="refresh-status" class="retry-button">
+              Refresh Status
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <main>
       <div id="chat-container">
         <!-- Messages will appear here -->
@@ -59,6 +274,144 @@
         <button type="submit" id="sendChat">Send</button>
       </form>
     </main>
+
+    <!-- API Status Check Script -->
+    <script>
+      // API Status checking and modal
+      document.addEventListener("DOMContentLoaded", function () {
+        const statusIndicator = document.getElementById("api-status");
+        const statusModal = document.getElementById("status-modal");
+        const closeBtn = document.querySelector(".status-modal-close");
+        const refreshBtn = document.getElementById("refresh-status");
+
+        // Check API status on load
+        checkApiStatus();
+
+        // Show modal when clicking on the status indicator
+        statusIndicator.addEventListener("click", function () {
+          statusModal.classList.add("open");
+          checkApiStatus(); // Refresh status when opening
+        });
+
+        // Close modal
+        closeBtn.addEventListener("click", function () {
+          statusModal.classList.remove("open");
+        });
+
+        // Close modal when clicking outside
+        statusModal.addEventListener("click", function (e) {
+          if (e.target === statusModal) {
+            statusModal.classList.remove("open");
+          }
+        });
+
+        // Refresh button
+        refreshBtn.addEventListener("click", function () {
+          const button = refreshBtn;
+          button.disabled = true;
+          button.textContent = "Checking...";
+
+          checkApiStatus().finally(() => {
+            button.disabled = false;
+            button.textContent = "Refresh Status";
+          });
+        });
+
+        // Function to check API status
+        async function checkApiStatus() {
+          updateStatusUI("checking");
+
+          try {
+            const response = await fetch("/api/status");
+            if (!response.ok) {
+              updateStatusUI("error", "API Error");
+              return;
+            }
+
+            const data = await response.json();
+            console.log("API Status:", data);
+
+            // Update GitHub status
+            const githubStatus = document.getElementById("github-status");
+            githubStatus.textContent = capitalizeFirstLetter(
+              data.github.status
+            );
+            githubStatus.className = "status-badge " + data.github.status;
+
+            // Update rate limit info if available
+            if (data.rateLimit) {
+              document.getElementById("rate-limit-container").style.display =
+                "block";
+              document.getElementById("rate-remaining").textContent =
+                data.rateLimit.remaining || 0;
+              document.getElementById("rate-limit").textContent =
+                data.rateLimit.limit || 0;
+
+              let resetTime = "Unknown";
+              if (data.rateLimit.reset) {
+                resetTime = new Date(data.rateLimit.reset).toLocaleTimeString();
+              }
+              document.getElementById("rate-reset").textContent = resetTime;
+            } else {
+              document.getElementById("rate-limit-container").style.display =
+                "none";
+            }
+
+            // Update overall status indicator
+            if (data.github.status === "rate_limited") {
+              updateStatusUI("warning", "Rate Limited");
+            } else if (data.github.status === "available") {
+              updateStatusUI("ok", "API Ready");
+            } else {
+              updateStatusUI("error", "API Issues");
+            }
+
+            return data;
+          } catch (error) {
+            console.error("Error checking API status:", error);
+            updateStatusUI("error", "Connection Error");
+            throw error;
+          }
+        }
+
+        // Update status indicator UI
+        function updateStatusUI(status, message) {
+          const statusElement = document.getElementById("api-status");
+          const indicatorElement = statusElement.querySelector(
+            ".api-status-indicator"
+          );
+          const textElement = statusElement.querySelector(".api-status-text");
+
+          // Remove existing classes
+          statusElement.classList.remove("ok", "error", "warning", "pulsing");
+
+          if (status === "checking") {
+            statusElement.classList.add("warning");
+            textElement.textContent = "Checking API...";
+          } else if (status === "ok") {
+            statusElement.classList.add("ok");
+            textElement.textContent = message || "API Ready";
+          } else if (status === "warning") {
+            statusElement.classList.add("warning", "pulsing");
+            textElement.textContent = message || "API Warning";
+          } else if (status === "error") {
+            statusElement.classList.add("error", "pulsing");
+            textElement.textContent = message || "API Error";
+          }
+        }
+
+        // Helper function to capitalize first letter
+        function capitalizeFirstLetter(string) {
+          return (
+            string.charAt(0).toUpperCase() + string.replace(/_/g, " ").slice(1)
+          );
+        }
+
+        // Run status check periodically
+        setInterval(checkApiStatus, 60000); // Check every minute
+      });
+    </script>
+
     <!-- Load scripts in the right order - no module type for connection-monitor.js -->
     <script src="/js/script.js"></script>
     <script src="/js/connection-monitor.js"></script>

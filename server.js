@@ -17,12 +17,14 @@ app.use((err, req, res, next) => {
   res.status(500).json({
     error: "An unexpected error occurred",
     details: process.env.NODE_ENV === "development" ? err.message : undefined,
+    time: new Date().toISOString(),
   });
 });
 
 // Routes
 app.post("/api/chat", chatController.handleChat);
 app.get("/api/models", chatController.getAvailableModels);
+app.get("/api/status", chatController.getApiStatus); // API status endpoint
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -47,6 +49,8 @@ if (require.main === module) {
     // Check if API key is configured
     if (!process.env.GITHUB_TOKEN) {
       console.warn("WARNING: GITHUB_TOKEN environment variable is not set!");
+    } else {
+      console.log("GitHub token is configured");
     }
   });
 }

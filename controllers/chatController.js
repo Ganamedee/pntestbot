@@ -1,4 +1,5 @@
 require("dotenv").config();
+const axios = require("axios");
 const ModelClient = require("@azure-rest/ai-inference").default;
 const { isUnexpected } = require("@azure-rest/ai-inference");
 const { AzureKeyCredential } = require("@azure/core-auth");
@@ -48,6 +49,76 @@ const debugLog = (message, data = null) => {
   }
 };
 
+// Rate limiting state
+let rateLimitInfo = {
+  isLimited: false,
+  resetTime: null,
+  lastChecked: null,
+  remaining: null,
+  limit: null,
+};
+
+// Function to check rate limit status using GitHub API
+const checkGitHubRateLimit = async (token) => {
+  try {
+    const response = await axios.get("https://api.github.com/rate_limit", {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: "application/vnd.github.v3+json",
+      },
+    });
+
+    const { resources } = response.data;
+    debugLog("GitHub Rate Limit Status:", resources);
+
+    // Check if we're rate limited - use a higher threshold (10) to be safe
+    const isLimited = resources.core.remaining < 10;
+
+    // Update rate limit info
+    rateLimitInfo = {
+      isLimited,
+      resetTime: new Date(resources.core.reset * 1000),
+      lastChecked: new Date(),
+      remaining: resources.core.remaining,
+      limit: resources.core.limit,
+    };
+
+    return rateLimitInfo;
+  } catch (error) {
+    debugLog("Error checking rate limit:", error.message);
+    return {
+      isLimited: false,
+      error: error.message,
+      lastChecked: new Date(),
+    };
+  }
+};
+
+// Dummy response for when GitHub API is unavailable
+const getFallbackResponse = (message) => {
+  return {
+    content: `⚠️ **GitHub API Rate Limit Exceeded**
+
+I'm sorry, but the GitHub AI API is currently rate limited. This happens when:
+
+- The shared API token has reached its usage limit
+- Too many requests are made in a short period of time
+- The same token is used across multiple applications (which you mentioned)
+
+**What you can try:**
+1. Wait a few minutes and try again
+2. Try a different model from the dropdown
+3. If you're the administrator, consider creating a new GitHub token specifically for this application
+
+Your question will be answered once the rate limit resets.`,
+    model: {
+      requested: "none",
+      actual: "none",
+      displayName: "Rate Limit Response",
+    },
+  };
+};
+
 const callAI = async (message, modelChoice = "gpt4") => {
   // Validate model choice early
   if (!AVAILABLE_MODELS[modelChoice]) {
@@ -58,31 +129,57 @@ const callAI = async (message, modelChoice = "gpt4") => {
   const selectedModel = AVAILABLE_MODELS[modelChoice].id;
   debugLog(`Using model: ${selectedModel}`);
 
-  // Check if token is available
-  if (!process.env.GITHUB_TOKEN) {
-    throw new Error(
-      "API token is not configured. Please check your environment variables."
-    );
-  }
-
-  // Try to remove any whitespace from token
+  // Get the token
   const token = process.env.GITHUB_TOKEN.trim();
 
-  debugLog("Initializing model client");
+  // Check if we're rate limited
+  const currentTime = new Date();
+  let shouldCheckRateLimit = true;
+
+  // Only check rate limit if we haven't checked recently (within last 60 seconds)
+  if (
+    rateLimitInfo.lastChecked &&
+    currentTime - rateLimitInfo.lastChecked < 60000
+  ) {
+    shouldCheckRateLimit = false;
+  }
+
+  // If we're rate limited and the reset time hasn't passed, return fallback
+  if (
+    rateLimitInfo.isLimited &&
+    rateLimitInfo.resetTime &&
+    currentTime < rateLimitInfo.resetTime
+  ) {
+    debugLog("Rate limited, returning fallback response");
+    return getFallbackResponse(message);
+  }
+
+  // Check rate limit if needed
+  if (shouldCheckRateLimit) {
+    try {
+      const rateLimit = await checkGitHubRateLimit(token);
+      if (rateLimit.isLimited) {
+        debugLog("Rate limit check confirmed we're limited");
+        return getFallbackResponse(message);
+      }
+    } catch (error) {
+      debugLog("Error checking rate limit, proceeding with caution", error);
+    }
+  }
+
+  debugLog("Proceeding with GitHub AI request");
 
   // Initialize client with improved timeout and retry settings
   const client = ModelClient(
     "https://models.github.ai/inference",
     new AzureKeyCredential(token),
     {
-      timeout: 150000, // 150 seconds - increased from 120s
-      retries: 4, // Increased retries from 3
+      timeout: 150000, // 150 seconds
+      retries: 4,
     }
   );
 
   try {
-    debugLog("Sending request to AI model");
-
     // Create the request payload
     const requestBody = {
       messages: [
@@ -98,24 +195,37 @@ const callAI = async (message, modelChoice = "gpt4") => {
       top_p: 1,
     };
 
-    debugLog("Request payload created", {
-      model: selectedModel,
-      messageLength: message.length,
-    });
-
     // Send the request
     const response = await client.path("/chat/completions").post({
       body: requestBody,
     });
 
-    // Improved error handling
+    // Reset rate limit flag if successful
+    if (rateLimitInfo.isLimited) {
+      rateLimitInfo.isLimited = false;
+    }
+
+    // Check for unexpected response
     if (isUnexpected(response)) {
       const errorDetails = response.body.error || "Unknown model error";
       debugLog(`Model response error: ${errorDetails}`, response.body);
+
+      // Check for rate limit errors
+      if (
+        errorDetails.toLowerCase().includes("rate limit") ||
+        errorDetails.toLowerCase().includes("too many requests") ||
+        errorDetails.toLowerCase().includes("429")
+      ) {
+        rateLimitInfo.isLimited = true;
+        // Set a default reset time of 5 minutes from now if not specified
+        rateLimitInfo.resetTime = new Date(Date.now() + 5 * 60 * 1000);
+        return getFallbackResponse(message);
+      }
+
       throw new Error(`Model Error: ${errorDetails}`);
     }
 
-    debugLog("Successfully received response from model");
+    debugLog("Successfully received response from GitHub AI");
 
     return {
       content: response.body.choices[0].message.content,
@@ -129,7 +239,19 @@ const callAI = async (message, modelChoice = "gpt4") => {
     // Enhanced error categorization for better debugging
     debugLog(`AI call error: ${error.message}`, error);
 
-    // Check for specific error types
+    // Check for rate limiting errors
+    if (
+      error.message.includes("429") ||
+      error.message.includes("too many requests") ||
+      error.message.includes("rate limit") ||
+      error.message.includes("exceeded")
+    ) {
+      rateLimitInfo.isLimited = true;
+      rateLimitInfo.resetTime = new Date(Date.now() + 5 * 60 * 1000); // Default 5 minute cooldown
+      return getFallbackResponse(message);
+    }
+
+    // Check for other specific error types
     if (
       error.message.includes("FUNCTION_INVOCATION_TIMEOUT") ||
       error.message.includes("timeout")
@@ -143,14 +265,7 @@ const callAI = async (message, modelChoice = "gpt4") => {
       error.message.includes("Authentication")
     ) {
       throw new Error(
-        "Authentication error. The API key may be invalid or expired."
-      );
-    } else if (
-      error.message.includes("429") ||
-      error.message.includes("limit")
-    ) {
-      throw new Error(
-        "Rate limit exceeded. Please wait a minute before trying again."
+        "Authentication error. The GitHub API key may be invalid or expired."
       );
     } else if (
       error.message.includes("500") ||
@@ -159,7 +274,7 @@ const callAI = async (message, modelChoice = "gpt4") => {
       error.message.includes("504")
     ) {
       throw new Error(
-        "The AI service is currently experiencing issues. Please try again later."
+        "The GitHub AI service is currently experiencing issues. Please try again later."
       );
     } else if (
       error.message.includes("ENOTFOUND") ||
@@ -211,13 +326,64 @@ const handleChat = async (req, res) => {
     };
 
     // Return a 503 status code for service unavailable rather than 500
-    // This helps indicate to the client that the service is temporarily unavailable
     res.status(503).json({
       error: errorMessage,
       model: modelInfo,
       errorTime: new Date().toISOString(),
+      rateLimited: rateLimitInfo.isLimited,
+      resetTime: rateLimitInfo.resetTime,
     });
   }
+};
+
+// Endpoint to check API status
+const getApiStatus = async (req, res) => {
+  const status = {
+    github: { status: "unknown" },
+    rateLimit: null,
+    timestamp: new Date().toISOString(),
+  };
+
+  // Check GitHub token
+  if (process.env.GITHUB_TOKEN && process.env.GITHUB_TOKEN.trim()) {
+    try {
+      // First check our cached rate limit info
+      if (
+        rateLimitInfo.lastChecked &&
+        Date.now() - rateLimitInfo.lastChecked < 60000
+      ) {
+        // Use cached info if recent
+        status.github.status = rateLimitInfo.isLimited
+          ? "rate_limited"
+          : "available";
+        status.rateLimit = {
+          remaining: rateLimitInfo.remaining,
+          limit: rateLimitInfo.limit,
+          reset: rateLimitInfo.resetTime,
+        };
+      } else {
+        // Otherwise check actual rate limit
+        const rateLimitStatus = await checkGitHubRateLimit(
+          process.env.GITHUB_TOKEN.trim()
+        );
+        status.github.status = rateLimitStatus.isLimited
+          ? "rate_limited"
+          : "available";
+        status.rateLimit = {
+          remaining: rateLimitStatus.remaining,
+          limit: rateLimitStatus.limit,
+          reset: rateLimitStatus.resetTime,
+        };
+      }
+    } catch (error) {
+      status.github.status = "error";
+      status.github.error = error.message;
+    }
+  } else {
+    status.github.status = "not_configured";
+  }
+
+  res.json(status);
 };
 
 const getAvailableModels = (req, res) => {
@@ -229,4 +395,4 @@ const getAvailableModels = (req, res) => {
   });
 };
 
-module.exports = { handleChat, getAvailableModels };
+module.exports = { handleChat, getAvailableModels, getApiStatus };

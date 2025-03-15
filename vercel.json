@@ -5,14 +5,49 @@
       "src": "server.js",
       "use": "@vercel/node",
       "config": {
-        "maxDuration": 90
+        "maxDuration": 120
       }
     }
   ],
   "routes": [
     {
+      "src": "/api/chat",
+      "dest": "server.js",
+      "methods": ["POST"],
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      }
+    },
+    {
+      "src": "/api/models",
+      "dest": "server.js",
+      "methods": ["GET"],
+      "headers": {
+        "Cache-Control": "public, max-age=3600"
+      }
+    },
+    {
+      "src": "/api/status",
+      "dest": "server.js",
+      "methods": ["GET"],
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      }
+    },
+    {
+      "src": "/health",
+      "dest": "server.js",
+      "methods": ["GET"],
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      }
+    },
+    {
       "src": "/(.*)",
       "dest": "server.js"
     }
-  ]
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
 }
