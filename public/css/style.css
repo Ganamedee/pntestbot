@@ -959,3 +959,27 @@ main {
   opacity: 1 !important;
   transition: all 0.3s ease;
 }
+
+/* Copy feedback overlay for code blocks */
+.copy-feedback {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(16, 185, 129, 0.95);
+  color: #fff;
+  padding: 0.5rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  z-index: 10;
+  pointer-events: none;
+  box-shadow: 0 2px 12px rgba(16,185,129,0.2);
+  display: none;
+  opacity: 0.97;
+  transition: opacity 0.2s;
+}
+
+.code-block {
+  position: relative;
+}

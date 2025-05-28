@@ -21,14 +21,8 @@ window.onload = function () {
         .replace(/&quot;/g, "&amp;quot;")
         .replace(/'/g, "&amp;#039;");
 
-      // Add a data attribute for language for easier targeting
-      return `<div class="code-block" tabindex="0" data-language="${language || ''}">
-      <div class="code-header">
-        ${language ? `<span class="code-language">${language}</span>` : ""}
-        <button class="copy-button" title="Copy to clipboard">Copy</button>
-      </div>
-      <pre><code class="language-${language || "text"}">${escapedCode}</code></pre>
-    </div>`;
+      // No copy button, just a code block
+      return `<div class=\"code-block\" tabindex=\"0\" data-language=\"${language || ''}\">\n      <div class=\"code-header\">${language ? `<span class=\"code-language\">${language}</span>` : ""}</div>\n      <pre><code class=\"language-${language || "text"}\">${escapedCode}</code></pre>\n    </div>`;
     },
     strong(text) {
       return `<strong>${text}</strong>`;
@@ -170,36 +164,28 @@ function appendMessage(text, sender = "bot") {
 
     // Process code blocks after adding to DOM
     setTimeout(() => {
-      // Add copy functionality to code blocks
+      // Add copy functionality to code blocks (no button)
       messageEl.querySelectorAll(".code-block").forEach((block) => {
         const codeBlock = block.querySelector("code");
-        const copyBtn = block.querySelector(".copy-button");
-
         // Helper to copy code and show feedback
         function copyCode() {
           navigator.clipboard.writeText(codeBlock.textContent);
-          copyBtn.textContent = "Copied!";
-          copyBtn.classList.add("copied");
-          block.classList.add("just-copied");
+          // Show a temporary overlay or feedback
+          let feedback = block.querySelector('.copy-feedback');
+          if (!feedback) {
+            feedback = document.createElement('div');
+            feedback.className = 'copy-feedback';
+            feedback.textContent = 'Copied!';
+            block.appendChild(feedback);
+          }
+          feedback.style.display = 'block';
           setTimeout(() => {
-            copyBtn.textContent = "Copy";
-            copyBtn.classList.remove("copied");
-            block.classList.remove("just-copied");
-          }, 2000);
+            feedback.style.display = 'none';
+          }, 1500);
         }
-
-        // Click on button copies code
-        copyBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          copyCode();
-        });
         // Click anywhere in code block copies code
-        block.addEventListener("click", (e) => {
-          // Prevent double trigger if button is clicked
-          if (e.target === copyBtn) return;
-          copyCode();
-        });
-        // Optional: keyboard accessibility
+        block.addEventListener("click", copyCode);
+        // Keyboard accessibility
         block.addEventListener("keydown", (e) => {
           if (e.key === "Enter" || e.key === " ") {
             copyCode();
