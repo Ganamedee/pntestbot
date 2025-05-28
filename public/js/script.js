@@ -21,14 +21,13 @@ window.onload = function () {
         .replace(/&quot;/g, "&amp;quot;")
         .replace(/'/g, "&amp;#039;");
 
-      return `<div class="code-block">
+      // Add a data attribute for language for easier targeting
+      return `<div class="code-block" tabindex="0" data-language="${language || ''}">
       <div class="code-header">
         ${language ? `<span class="code-language">${language}</span>` : ""}
-        <button class="copy-button">Copy</button>
+        <button class="copy-button" title="Copy to clipboard">Copy</button>
       </div>
-      <pre><code class="language-${
-        language || "text"
-      }">${escapedCode}</code></pre>
+      <pre><code class="language-${language || "text"}">${escapedCode}</code></pre>
     </div>`;
     },
     strong(text) {
@@ -100,22 +99,18 @@ chatInput.addEventListener("keydown", (e) => {
 
 // Welcome message function
 function displayWelcomeMessage() {
-  const welcomeMessage = `# Welcome to PenTest AI
-
-This tool provides ethical hacking guidance for security professionals.
-
-**Important Notes:**
-- Always obtain proper authorization before testing any system
-- This tool is for educational purposes only
-- Use this knowledge responsibly and legally
-
-**Example Commands:**
-Type your ethical hacking question or ask for commands related to:
-- Reconnaissance and information gathering
-- Network scanning and enumeration
-- Vulnerability assessment
-- Security tool usage in Kali Linux`;
-
+  const welcomeMessage = `
+<div class="welcome-message">
+  <h1>Welcome to PenTest AI</h1>
+  <p><strong>PenTest AI</strong> is your friendly assistant for learning and using <strong>Kali Linux</strong> tools and ethical hacking techniques.</p>
+  <ul>
+    <li>Ask for explanations or examples of Kali Linux commands and tools.</li>
+    <li>Get step-by-step guidance for penetration testing and security research.</li>
+    <li>All advice is for <strong>authorized, ethical, and educational</strong> purposes only.</li>
+  </ul>
+  <p style="margin-top:1rem; color:#10b981;"><strong>Type your question below to get started!</strong></p>
+</div>
+`;
   appendMessage(welcomeMessage, "bot");
 }
 
@@ -177,26 +172,38 @@ function appendMessage(text, sender = "bot") {
     setTimeout(() => {
       // Add copy functionality to code blocks
       messageEl.querySelectorAll(".code-block").forEach((block) => {
-        // Create copy button if it doesn't exist
-        if (!block.querySelector(".copy-button")) {
-          const header = block.querySelector(".code-header");
-          const copyBtn = document.createElement("button");
-          copyBtn.className = "copy-button";
-          copyBtn.textContent = "Copy";
-          header.appendChild(copyBtn);
+        const codeBlock = block.querySelector("code");
+        const copyBtn = block.querySelector(".copy-button");
+
+        // Helper to copy code and show feedback
+        function copyCode() {
+          navigator.clipboard.writeText(codeBlock.textContent);
+          copyBtn.textContent = "Copied!";
+          copyBtn.classList.add("copied");
+          block.classList.add("just-copied");
+          setTimeout(() => {
+            copyBtn.textContent = "Copy";
+            copyBtn.classList.remove("copied");
+            block.classList.remove("just-copied");
+          }, 2000);
         }
 
-        // Add event listener to copy button
-        block.querySelector(".copy-button").addEventListener("click", () => {
-          const codeBlock = block.querySelector("code");
-          navigator.clipboard.writeText(codeBlock.textContent);
-          const copyButton = block.querySelector(".copy-button");
-          copyButton.textContent = "Copied!";
-          copyButton.classList.add("copied");
-          setTimeout(() => {
-            copyButton.textContent = "Copy";
-            copyButton.classList.remove("copied");
-          }, 2000);
+        // Click on button copies code
+        copyBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          copyCode();
+        });
+        // Click anywhere in code block copies code
+        block.addEventListener("click", (e) => {
+          // Prevent double trigger if button is clicked
+          if (e.target === copyBtn) return;
+          copyCode();
+        });
+        // Optional: keyboard accessibility
+        block.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            copyCode();
+          }
         });
       });
 
