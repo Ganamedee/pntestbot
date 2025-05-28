@@ -48,7 +48,7 @@ const callAI = async (message, history) => {
   const payload = {
     model: NIM_MODEL,
     messages,
-    max_tokens: 512,
+    max_tokens: 4096,
     temperature: 1.0,
     top_p: 1.0,
     stream: false,
