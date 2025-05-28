@@ -81,15 +81,12 @@ const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
 const chatContainer = document.getElementById("chat-container");
 const sendButton = document.getElementById("sendChat");
-const modelSelect = document.getElementById("model-select");
 
 // Connection status tracking
 let connectionIssues = false;
 let lastRequestTime = 0;
-let lastModelUsed = null;
 let retryCount = 0;
 const MIN_REQUEST_INTERVAL = 2000; // 2 seconds to prevent rapid successive requests
-const MAX_RETRIES = 3; // Maximum number of automatic retries
 
 // Enter key handling
 chatInput.addEventListener("keydown", (e) => {
@@ -132,7 +129,7 @@ function debugLog(message, data = null) {
   }
 }
 
-function appendMessage(text, sender = "bot", modelInfo = null) {
+function appendMessage(text, sender = "bot") {
   const messageEl = document.createElement("div");
   messageEl.classList.add("message", sender);
 
@@ -152,14 +149,6 @@ function appendMessage(text, sender = "bot", modelInfo = null) {
       text.includes("🔑")
     ) {
       messageEl.classList.add("error");
-    }
-
-    // Add model info banner if available
-    if (modelInfo) {
-      const modelBanner = document.createElement("div");
-      modelBanner.classList.add("model-banner");
-      modelBanner.innerHTML = `<span class="model-indicator">Using: ${modelInfo.displayName}</span>`;
-      messageEl.appendChild(modelBanner);
     }
 
     // Add the message content
@@ -253,44 +242,12 @@ function setLoading(isLoading) {
   }
 }
 
-// Function to retry the last request
-function retryLastRequest() {
-  if (window.lastUserMessage) {
-    // Use a different model if we've had multiple failures
-    let selectedModel = modelSelect.value;
-
-    if (retryCount >= 1 && lastModelUsed === selectedModel) {
-      // Try a different model
-      const models = Object.keys(AVAILABLE_MODELS);
-      const currentIndex = models.indexOf(selectedModel);
-      const nextIndex = (currentIndex + 1) % models.length;
-      selectedModel = models[nextIndex];
-
-      // Update UI to show switched model
-      modelSelect.value = selectedModel;
-
-      appendMessage(
-        `Switching to ${getModelDisplayName(selectedModel)} to try again...`,
-        "bot"
-      );
-    }
-
-    // Reset the input with the last message
-    chatInput.value = window.lastUserMessage;
-
-    // Submit the form
-    chatForm.dispatchEvent(new Event("submit"));
-
-    retryCount++;
-  }
-}
-
 // Enhanced error handling
-function handleApiError(error, selectedModel) {
+function handleApiError(error) {
   debugLog("API Error:", error);
 
   let errorMessage =
-    "The AI model is currently unavailable. Please try again later or select a different model.";
+    "The AI model is currently unavailable. Please try again later.";
 
   // Check for specific error messages from the backend
   if (error.includes("timeout") || error.includes("long")) {
@@ -306,24 +263,16 @@ function handleApiError(error, selectedModel) {
   // If we detect multiple failures, provide more helpful guidance
   if (connectionIssues) {
     errorMessage +=
-      "\n\n**Troubleshooting Steps:**\n1. Try refreshing the page\n2. Try a different model\n3. Wait a few minutes and try again";
+      "\n\n**Troubleshooting Steps:**\n1. Try refreshing the page\n2. Wait a few minutes and try again";
   }
 
   // If we've retried too many times, suggest different remedies
-  if (retryCount >= MAX_RETRIES) {
+  if (retryCount >= 3) {
     errorMessage +=
       "\n\n**Multiple retries failed. You might want to:**\n- Try a simpler or shorter query\n- Check if your question follows ethical guidelines\n- Try again later when the service might be more available";
   }
 
-  const modelInfo = {
-    displayName: getModelDisplayName(selectedModel),
-  };
-
-  return appendMessage(errorMessage, "bot", modelInfo);
-}
-
-function getModelDisplayName(modelId) {
-  return AVAILABLE_MODELS[modelId]?.name || modelId || "Unknown Model";
+  return appendMessage(errorMessage, "bot");
 }
 
 // Model preference handling
@@ -337,15 +286,6 @@ function loadModelPreference() {
     modelSelect.value = savedModel;
   }
 }
-
-// Define models to match the backend
-const AVAILABLE_MODELS = {
-  gpt4: { name: "GPT-4o (OpenAI)" },
-  "llama-3.3": { name: "Llama 3.3 (Meta)" },
-  phi4: { name: "Phi-4 (Microsoft)" },
-  "llama-3.1": { name: "Llama 3.1 (Meta)" },
-  deepseek: { name: "DeepSeek" },
-};
 
 // Enable debug mode via URL parameter
 if (window.location.search.includes("debug=true")) {
@@ -366,13 +306,10 @@ chatForm.addEventListener("submit", async (e) => {
   lastRequestTime = currentTime;
 
   const userMessage = chatInput.value.trim();
-  const selectedModel = modelSelect.value;
-  lastModelUsed = selectedModel;
-
   if (!userMessage || sendButton.disabled) return;
 
   // Append user message
-  const userMessageId = appendMessage(userMessage, "user");
+  appendMessage(userMessage, "user");
   chatInput.value = "";
 
   // Show loading indicator
@@ -381,76 +318,51 @@ chatForm.addEventListener("submit", async (e) => {
   // Store this message for potential retry
   window.lastUserMessage = userMessage;
 
-  debugLog(`Sending chat request with model: ${selectedModel}`);
+  debugLog(`Sending chat request`);
 
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: userMessage,
-        model: selectedModel,
-      }),
-      // Add timeout to prevent hanging requests
-      signal: AbortSignal.timeout(150000), // 2.5 minute timeout
+      body: JSON.stringify({ message: userMessage }),
+      signal: AbortSignal.timeout(150000),
     });
 
-    // Remove loading indicator
     setLoading(false);
 
-    // Handle response
     if (!response.ok) {
       connectionIssues = true;
       let errorText = "Server Error";
-
       try {
         const errorData = await response.json();
-        errorText =
-          errorData.error || `Error ${response.status}: ${response.statusText}`;
+        errorText = errorData.error || `Error ${response.status}: ${response.statusText}`;
         debugLog("Error response data:", errorData);
       } catch (e) {
         errorText = `Error ${response.status}: ${response.statusText}`;
         debugLog("Failed to parse error response", e);
       }
-
-      handleApiError(errorText, selectedModel);
+      handleApiError(errorText);
       return;
     }
 
-    // Parse successful response
     const data = await response.json();
-    connectionIssues = false; // Reset connection issues flag on success
-    retryCount = 0; // Reset retry count on success
-
+    connectionIssues = false;
+    retryCount = 0;
     debugLog("Received successful response", data);
-
     if (data.error) {
-      handleApiError(data.error, selectedModel);
+      handleApiError(data.error);
     } else {
-      appendMessage(data.response, "bot", data.model);
+      appendMessage(data.response, "bot");
     }
   } catch (error) {
-    // Remove loading indicator
     setLoading(false);
     connectionIssues = true;
-
-    debugLog("Fetch error:", error);
-
-    // Handle different error types
-    let errorMessage =
-      "Network error. Please check your connection and try again.";
+    let errorMessage = "Network error. Please check your connection and try again.";
     if (error.name === "AbortError") {
       errorMessage = "Request timed out. The server took too long to respond.";
     }
-
-    handleApiError(errorMessage, selectedModel);
+    handleApiError(errorMessage);
   }
-});
-
-// Add model change event listener to save preference
-modelSelect.addEventListener("change", (e) => {
-  saveModelPreference(e.target.value);
-  retryCount = 0; // Reset retry count when model changes
 });
 
 // Set focus to input on page load
