@@ -156,15 +156,6 @@ function appendMessage(text, sender = "bot") {
 
     messageEl.appendChild(contentDiv);
 
-    // Add retry button for error messages
-    if (messageEl.classList.contains("error")) {
-      const retryButton = document.createElement("button");
-      retryButton.className = "retry-button";
-      retryButton.innerHTML = "Try Again";
-      retryButton.addEventListener("click", retryLastRequest);
-      contentDiv.appendChild(retryButton);
-    }
-
     // Process code blocks after adding to DOM
     setTimeout(() => {
       // Add copy functionality to code blocks (no button)
