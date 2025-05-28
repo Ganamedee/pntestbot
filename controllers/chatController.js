@@ -27,7 +27,7 @@ if (!NIM_API_KEY) {
 const NIM_MODEL = "meta/llama-4-maverick-17b-128e-instruct";
 const NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 
-const callAI = async (message) => {
+const callAI = async (message, history) => {
   if (!NIM_API_KEY) {
     throw new Error("NVIDIA NIM API key is not configured on the server.");
   }
@@ -36,12 +36,16 @@ const callAI = async (message) => {
     Accept: "application/json",
   };
 
+  // Build the full message history for context
+  const messages = [
+    { role: "system", content: systemMessage },
+    ...(Array.isArray(history) ? history : []),
+    { role: "user", content: message },
+  ];
+
   const payload = {
     model: NIM_MODEL,
-    messages: [
-      { role: "system", content: systemMessage },
-      { role: "user", content: message },
-    ],
+    messages,
     max_tokens: 512,
     temperature: 1.0,
     top_p: 1.0,
@@ -60,12 +64,12 @@ const callAI = async (message) => {
 };
 
 const handleChat = async (req, res) => {
-  const { message } = req.body;
+  const { message, history } = req.body;
   if (!message) {
     return res.status(400).json({ error: "Missing message" });
   }
   try {
-    const response = await callAI(message);
+    const response = await callAI(message, history);
     res.json({ response: response.content, model: response.model });
   } catch (error) {
     res.status(503).json({ error: error.message, model: { requested: NIM_MODEL, displayName: "NVIDIA NIM Llama-4 Maverick" }, errorTime: new Date().toISOString() });

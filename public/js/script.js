@@ -81,6 +81,9 @@ let lastRequestTime = 0;
 let retryCount = 0;
 const MIN_REQUEST_INTERVAL = 2000; // 2 seconds to prevent rapid successive requests
 
+// Persistent chat history for context
+let chatHistory = [];
+
 // Enter key handling
 chatInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
@@ -301,9 +304,12 @@ chatForm.addEventListener("submit", async (e) => {
   const userMessage = chatInput.value.trim();
   if (!userMessage || sendButton.disabled) return;
 
-  // Append user message
+  // Append user message visually
   appendMessage(userMessage, "user");
   chatInput.value = "";
+
+  // Add user message to chat history
+  chatHistory.push({ role: "user", content: userMessage });
 
   // Show loading indicator
   setLoading(true);
@@ -317,7 +323,7 @@ chatForm.addEventListener("submit", async (e) => {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: userMessage }),
+      body: JSON.stringify({ message: userMessage, history: chatHistory.slice(0, -1) }), // Exclude the just-added user message
       signal: AbortSignal.timeout(150000),
     });
 
@@ -335,6 +341,8 @@ chatForm.addEventListener("submit", async (e) => {
         debugLog("Failed to parse error response", e);
       }
       handleApiError(errorText);
+      // Remove the last user message from chatHistory if error
+      chatHistory.pop();
       return;
     }
 
@@ -346,6 +354,8 @@ chatForm.addEventListener("submit", async (e) => {
       handleApiError(data.error);
     } else {
       appendMessage(data.response, "bot");
+      // Add assistant message to chat history
+      chatHistory.push({ role: "assistant", content: data.response });
     }
   } catch (error) {
     setLoading(false);
@@ -355,6 +365,8 @@ chatForm.addEventListener("submit", async (e) => {
       errorMessage = "Request timed out. The server took too long to respond.";
     }
     handleApiError(errorMessage);
+    // Remove the last user message from chatHistory if error
+    chatHistory.pop();
   }
 });
 
