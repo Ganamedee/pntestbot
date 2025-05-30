@@ -8,7 +8,7 @@ PenTestAI is an AI-powered chatbot specifically tailored to assist cybersecurity
 
 ## What it Does
 
-PenTestAI acts as an intelligent assistant for your penetration testing workflow. By leveraging advanced AI models (like GPT-4o, Llama 3.1, Phi-4, DeepSeek) via the GitHub/Azure AI Inference API, it provides contextually relevant information, command examples, and explanations for various security tools and techniques, all while emphasizing ethical conduct.
+PenTestAI acts as an intelligent assistant for your penetration testing workflow. By leveraging Llama 4.0 via the NVIDIA NIM API, it provides contextually relevant information, command examples, and explanations for various security tools and techniques, all while emphasizing ethical conduct.
 
 ## Key Features
 
